@@ -7,6 +7,7 @@ Licensed under the MIT License (see LICENSE for details)
 Written by Waleed Abdulla
 """
 
+from pickle import NONE
 import numpy as np
 
 
@@ -209,6 +210,10 @@ class Config(object):
 
     # Gradient norm clipping
     GRADIENT_CLIP_NORM = 5.0
+
+    # Class Weights dict for when you have an imbalance in class frequency
+    # Can be used for R-CNNN training setup
+    CLASS_WEIGHTS = None
 
     def __init__(self):
         """Set values of computed attributes."""
