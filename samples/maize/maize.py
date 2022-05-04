@@ -215,16 +215,18 @@ class MaizeDataset(utils.Dataset):
         bitmap_path = osp.join((osp.dirname(info["path"])), f"{image_name}_label.png")
         instances = info["class_ids"]
         # Read mask files from .png image
-        masks = []
+        mask = []
         class_ids = []
         bitmap = skimage.io.imread(bitmap_path)
         for instance in instances:
-            m = np.array(bitmap, np.uint32) == instance["id"]
-            masks.append(m)
+            m = np.array(bitmap, np.bool) == instance["id"]
+            mask.append(m)
             class_ids.append(instance["class_id"])
+        mask = np.stack(mask, axis=-1)
+        class_ids = np.asarray(class_ids, dtype=np.int32)
 
         # Return mask, and array of class IDs of each instance.
-        return masks, class_ids
+        return mask, class_ids
 
     def image_reference(self, image_id):
         """Return the path of the image."""
