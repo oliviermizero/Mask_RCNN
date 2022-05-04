@@ -142,6 +142,7 @@ class MaizeInferenceConfig(MaizeConfig):
 #  Dataset
 ############################################################
 VAL_IMAGE_IDS = []
+TEST_IMAGE_IDS = []
 
 
 class MaizeDataset(utils.Dataset):
@@ -152,23 +153,31 @@ class MaizeDataset(utils.Dataset):
         self.add_class("Maize", 1, "kernel")
         self.add_class("Maize", 2, "cob")
 
+        # Get filenames and annotation
+        filenames = next(os.walk(dataset_dir))[2]
+        annotation_filename = [
+            filename for filename in filenames if filename.split(".")[1] == "json"
+        ][0]
+
         # Which subset?
         # "val":
         # "train":
         # else: use the data from the specified sub-directory
         assert subset in ["train", "val", "test"]
-        subset_dir = subset
-        dataset_dir = os.path.join(dataset_dir, subset_dir)
-        # Get image ids from directory names
-        filenames = next(os.walk(dataset_dir))[2]
-        annotation_filename = [
-            filename for filename in filenames if filename.split(".")[1] == "json"
-        ][0]
-        image_ids = [
-            filename.split(".")[0]
-            for filename in filenames
-            if ((len(filename.split("_")) <= 3) and (filename.split(".")[1] == "png"))
-        ]
+        if subset == "val":
+            image_ids = VAL_IMAGE_IDS
+        elif subset == "test":
+            image_ids = TEST_IMAGE_IDS
+        else:
+            image_ids = [
+                filename.split(".")[0]
+                for filename in filenames
+                if (
+                    (len(filename.split("_")) <= 4)
+                    and (filename.split(".")[1] == "png")
+                )
+            ]
+            image_ids = list(set(image_ids) - set(VAL_IMAGE_IDS))
 
         annotation_json = osp.join(dataset_dir, annotation_filename)
         with open(annotation_json) as f:

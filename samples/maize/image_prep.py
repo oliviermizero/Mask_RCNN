@@ -40,12 +40,16 @@ def save_split_images(split_image, output_dir, image_name):
     counter = 1
     split_iname = image_name.split("_")
     for image in split_image:
-        if len(split_iname) > 3:
-            output_name = "{}_{}_s{}_{}_{}.png".format(
+        if len(split_iname) == 4:
+            output_name = "{}_{}_s{}_{}.png".format(
+                split_iname[0], split_iname[1], str(counter), split_iname[2]
+            )
+        elif len(split_iname) == 5:
+            output_name = "{}_{}_{}_s{}_{}.png".format(
                 split_iname[0],
                 split_iname[1],
-                str(counter),
                 split_iname[2],
+                str(counter),
                 split_iname[3],
             )
         else:
@@ -144,7 +148,14 @@ def main():
     parser = ArgumentParser()
 
     parser.add_argument(
-        "api_key", help="api_key for Segments.ai", type=str, action="store",
+        "api_key", help="personal api_key for Segments.ai", type=str, action="store",
+    )
+
+    parser.add_argument(
+        "release_version",
+        help="release version to download from Segments.ai",
+        type=str,
+        action="store",
     )
 
     parser.add_argument(
@@ -153,14 +164,6 @@ def main():
         dest="dataset_name",
         help="dataset_name to download from Segments.ai",
         default="Cchristenson3/Mazie_Images",
-        type=str,
-        action="store",
-    )
-
-    parser.add_argument(
-        "release_version",
-        dest="release_version",
-        help="release version to download from Segments.ai",
         type=str,
         action="store",
     )
@@ -191,7 +194,8 @@ def main():
     dataset = SegmentsDataset(
         release, filter_by="labeled", segments_dir=args.output_dir
     )
-    img_dir = osp.join(args.dataset_name, args.release_version, args.output_dir)
+    dataset_folder = args.dataset_name.replace("/", "_")
+    img_dir = osp.join(args.output_dir, dataset_folder, args.release_version)
     write_annotations(dataset, img_dir)
 
     split_output_dir = osp.join(osp.dirname(args.output_dir), "split")
