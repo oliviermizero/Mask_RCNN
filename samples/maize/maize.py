@@ -173,7 +173,7 @@ class MaizeDataset(utils.Dataset):
                 filename.split(".")[0]
                 for filename in filenames
                 if (
-                    (len(filename.split("_")) <= 4)
+                    (not filename.split("_")[-1] == "label.png")
                     and (filename.split(".")[1] == "png")
                 )
             ]
