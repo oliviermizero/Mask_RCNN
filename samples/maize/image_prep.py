@@ -144,11 +144,7 @@ def main():
     parser = ArgumentParser()
 
     parser.add_argument(
-        "api_key",
-        dest="api_key",
-        help="api_key for Segments.ai",
-        type="string",
-        action="store",
+        "api_key", dest="api_key", help="api_key for Segments.ai", type="string",
     )
 
     parser.add_argument(
@@ -166,7 +162,6 @@ def main():
         dest="release_version",
         help="release version to download from Segments.ai",
         type="string",
-        action="store",
     )
 
     parser.add_argument(
