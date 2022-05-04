@@ -212,9 +212,7 @@ class MaizeDataset(utils.Dataset):
         info = self.image_info[image_id]
         # Get mask directory from image path
         image_name = info["id"]
-        bitmap_path = osp.join(
-            (osp.dirname(info["path"])), f"{image_name}_label_ground-truth.png"
-        )
+        bitmap_path = osp.join((osp.dirname(info["path"])), f"{image_name}_label.png")
         instances = info["class_ids"]
         # Read mask files from .png image
         masks = []
