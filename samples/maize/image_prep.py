@@ -78,8 +78,11 @@ def split_annotations(split_name, split_label_array, annotation_json, output_dir
                     class_ids.append(
                         {"id": class_id.get("id"), "class_id": class_id.get("class_id")}
                     )
-
-    split_annotations = {"image_name": split_name, "class_ids": class_ids}
+    if len(class_ids) == 0:
+        print(f"No labels found on {split_name}")
+        return
+    else:
+        split_annotations = {"image_name": split_name, "class_ids": class_ids}
 
     file_name = os.path.join(output_dir, "split_annotations.json")
     if osp.exists(file_name):
@@ -135,6 +138,35 @@ def image_and_mask_prep(image_dir, split_number, output_dir):
         for split_n, split in enumerate(split_label):
             split_name = "{}_s{}".format(image_name, str(split_n + 1))
             split_annotations(split_name, split, annotation_json, output_dir)
+
+
+def remove_empty_images(image_dir):
+    filenames = next(os.walk(image_dir))[2]
+
+    annotation_filename = [
+        filename for filename in filenames if filename.split(".")[1] == "json"
+    ][0]
+
+    with open(annotation_filename, "r") as f:
+        annotations = json.load(f)
+
+    image_ids = [
+        filename
+        for filename in filenames
+        if (
+            (not filename.split("_")[-1] == "label.png")
+            and (filename.split(".")[1] == "png")
+        )
+    ]
+
+    annotated_images = [annotation["image_name"] for annotation in annotations]
+    for image_id in image_ids:
+        if image_id in annotated_images:
+            continue
+        else:
+            os.remove(osp.join(image_dir, image_id))
+            label_id = "{}_label.png".format(image_id.split(".")[0])
+            os.remove(osp.join(image_dir, label_id))
 
 
 ####FIX MAIN#####
@@ -202,6 +234,8 @@ def main():
     if not osp.exists(split_output_dir):
         os.makedirs(split_output_dir)
     image_and_mask_prep(img_dir, 3, split_output_dir)
+
+    remove_empty_images(split_output_dir)
 
 
 if __name__ == "__main__":
