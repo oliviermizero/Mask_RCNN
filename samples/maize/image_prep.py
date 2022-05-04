@@ -152,18 +152,18 @@ def main():
     )
 
     parser.add_argument(
-        "-d",
-        "--dataset_name",
-        dest="dataset_name",
-        help="dataset_name to download from Segments.ai",
-        default="Cchristenson3/Mazie_Images",
+        "release_version",
+        help="release version to download from Segments.ai",
         type=str,
         action="store",
     )
 
     parser.add_argument(
-        "release_version",
-        help="release version to download from Segments.ai",
+        "-d",
+        "--dataset_name",
+        dest="dataset_name",
+        help="dataset_name to download from Segments.ai",
+        default="Cchristenson3/Mazie_Images",
         type=str,
         action="store",
     )
