@@ -144,7 +144,7 @@ def main():
     parser = ArgumentParser()
 
     parser.add_argument(
-        "api_key", dest="api_key", help="api_key for Segments.ai", type="string",
+        "api_key", help="api_key for Segments.ai", type=str, action="store",
     )
 
     parser.add_argument(
@@ -153,7 +153,7 @@ def main():
         dest="dataset_name",
         help="dataset_name to download from Segments.ai",
         default="Cchristenson3/Mazie_Images",
-        type="string",
+        type=str,
         action="store",
     )
 
@@ -161,7 +161,8 @@ def main():
         "release_version",
         dest="release_version",
         help="release version to download from Segments.ai",
-        type="string",
+        type=str,
+        action="store",
     )
 
     parser.add_argument(
@@ -170,7 +171,7 @@ def main():
         dest="output_dir",
         help="location to store images and annotations.",
         default="./full",
-        type="string",
+        type=str,
         action="store",
     )
 
@@ -190,13 +191,13 @@ def main():
     dataset = SegmentsDataset(
         release, filter_by="labeled", segments_dir=args.output_dir
     )
-
-    write_annotations(dataset, args.output_dir)
+    img_dir = osp.join(args.dataset_name, args.release_version, args.output_dir)
+    write_annotations(dataset, img_dir)
 
     split_output_dir = osp.join(osp.dirname(args.output_dir), "split")
     if not osp.exists(split_output_dir):
         os.makedirs(split_output_dir)
-    image_and_mask_prep(args.output_dir, 3, split_output_dir)
+    image_and_mask_prep(img_dir, 3, split_output_dir)
 
 
 if __name__ == "__main__":
