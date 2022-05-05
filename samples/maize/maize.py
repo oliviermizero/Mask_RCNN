@@ -219,7 +219,8 @@ class MaizeDataset(utils.Dataset):
         class_ids = []
         bitmap = skimage.io.imread(bitmap_path)
         for instance in instances:
-            m = np.array(bitmap, np.bool) == instance["id"]
+            m = np.array(bitmap, np.uint32) == instance["id"]
+            m.astype(bool)
             mask.append(m)
             class_ids.append(instance["class_id"])
         mask = np.stack(mask, axis=-1)
@@ -232,7 +233,7 @@ class MaizeDataset(utils.Dataset):
         """Return the path of the image."""
         info = self.image_info[image_id]
         if info["source"] == "Maize":
-            return info["id"]
+            return info["path"]
         else:
             super(self.__class__, self).image_reference(image_id)
 
