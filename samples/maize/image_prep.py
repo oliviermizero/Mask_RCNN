@@ -147,7 +147,7 @@ def remove_empty_images(image_dir):
         filename for filename in filenames if filename.split(".")[1] == "json"
     ][0]
 
-    with open(annotation_filename, "r") as f:
+    with open(osp.join(image_dir, annotation_filename), "r") as f:
         annotations = json.load(f)
 
     image_ids = [
@@ -161,7 +161,7 @@ def remove_empty_images(image_dir):
 
     annotated_images = [annotation["image_name"] for annotation in annotations]
     for image_id in image_ids:
-        if image_id in annotated_images:
+        if image_id.split(".")[0] in annotated_images:
             continue
         else:
             os.remove(osp.join(image_dir, image_id))
