@@ -43,6 +43,7 @@ import json
 import datetime
 import numpy as np
 import skimage.io
+from PIL import Image
 from imgaug import augmenters as iaa
 
 # Root directory of the project
@@ -279,7 +280,7 @@ def train(model, config, dataset_dir, subset):
         dataset_train,
         dataset_val,
         learning_rate=config.LEARNING_RATE,
-        epochs=20,
+        epochs=10,
         augmentation=augmentation,
         layers="heads",
     )
@@ -288,7 +289,7 @@ def train(model, config, dataset_dir, subset):
     model.train(
         dataset_train,
         dataset_val,
-        learning_rate=config.LEARNING_RATE,
+        learning_rate=config.LEARNING_RATE / 10,
         epochs=40,
         augmentation=augmentation,
         layers="all",
@@ -296,11 +297,227 @@ def train(model, config, dataset_dir, subset):
 
 
 ############################################################
+#  Image spliting
+############################################################
+
+
+def get_splits(image_width, split_number, overlap):
+    # A really complicated fuction to get the split sections, with overlap
+    image_splits = []
+    total_image_width = image_width
+    overlap_width = overlap
+
+    if split_number == 1:
+        image_splits.append([0, total_image_width])
+
+    # This will be the most used case, as of now, with a split of 3 sub-images.
+    # In this case, since a lot of the ear images have significant space on the
+    # left and right, I want the center sub-image to not be too big. To avoid
+    # this, I'll do the overlaps from the left and right images and leave the
+    # center image unchanged.`
+    elif split_number == 3:
+        # Here's the split width if there's no overlap (note: probably will
+        # need to do something about rounding errors here with certain image
+        # widths).
+        no_overlap_width = int(total_image_width / split_number)
+
+        # Left split. The left side of the left split will always be zero.
+        left_split = []
+        left_split.append(0)
+
+        # The other side of the left split will be the width (minus 1 to fix
+        # the 0 index start) plus the overlap
+        left_split.append(no_overlap_width + overlap_width)
+        image_splits.append(left_split)
+
+        # The middle has no overlap in this case
+        middle_split = []
+        middle_split.append(no_overlap_width - (overlap_width / 2))
+        middle_split.append((no_overlap_width * 2) + (overlap_width / 2))
+        image_splits.append(middle_split)
+
+        # The right split is the opposite of the left split
+        right_split = []
+        right_split.append((2 * no_overlap_width) - overlap_width)
+        right_split.append(total_image_width)
+        image_splits.append(right_split)
+
+    return image_splits
+
+
+def spliting_image(image_np_array, split_list):
+    # The fuction that actually splits the images
+    print(image_np_array.shape)
+    array_list = []
+
+    for split_nums in split_list:
+        left_border = int(split_nums[0])
+        right_border = int(split_nums[1])
+        print("Borders:{}, {}".format(left_border, right_border))
+        sub_array = image_np_array[:, left_border:right_border, :]
+        array_list.append(sub_array)
+
+    return array_list
+
+
+def fix_relative_coord(output_dict, list_of_splits, image_position):
+    output_dict_adj = output_dict
+
+    # Getting the image width out of the list of splits (it's the right side of
+    # the last split).
+    image_width = list_of_splits[-1][1]
+
+    # Getting the split width
+    split_width = list_of_splits[image_position][1] - list_of_splits[image_position][0]
+
+    # First we get a constant adjustment for the "image position". The
+    # adjustment is where the left side of the current image starts, relative
+    # to the entire image. We can get this from the list_of_splits.
+    position_adjustment = list_of_splits[image_position][0]
+
+    # Now we adjust the x coordinates of the 'rois' ndarray, We
+    # don't need to adjust the y coordinates because we only split on the x. If
+    # later I add splitting on y, then the y coordinates need to be adjusted.
+    # This adjustment "shrinks" the relative coordinates down.
+    adjusted_boxes = output_dict["rois"]
+
+    # adjusted_boxes[:,[1,3]] = adjusted_boxes[:,[1,3]] *(split_width / image_width)
+
+    # Adding the adjustment for which split image it is (the first image
+    # doesn't need adjustment, hence the if statement).
+    if image_position > 0:
+        adjusted_boxes[:, [1, 3]] = adjusted_boxes[:, [1, 3]] + position_adjustment
+
+    # Now adding back in the adjusted boxes to the original ndarray
+    output_dict_adj["rois"] = adjusted_boxes
+
+    return output_dict_adj
+
+
+def pad_mask(results, list_of_splits, split_number, image_height):
+    output_adj_dict = results
+    # Getting the image width out of the list of splits (it's the right side of
+    # the last split).
+    image_width = list_of_splits[-1][1]
+    height = image_height
+    padded_masks = []
+    r = results
+    if split_number == 0:
+        added_width = int(image_width - list_of_splits[0][1])
+        padding_array = np.zeros([height, added_width])
+        for i in range(len(r["masks"][1, 1, :])):
+            combined = np.concatenate(
+                (r["masks"][:, :, i].astype(np.uint8), padding_array), axis=1
+            )
+            padded_masks.append(combined)
+
+    elif split_number == 1:
+        added_width_l = int(list_of_splits[1][0])
+        added_width_r = int(image_width - list_of_splits[1][1])
+        padding_array_l = np.zeros([height, added_width_l])
+        padding_array_r = np.zeros([height, added_width_r])
+        for i in range(len(r["masks"][1, 1, :])):
+            combined = np.concatenate(
+                (
+                    padding_array_r,
+                    r["masks"][:, :, i].astype(np.uint8),
+                    padding_array_l,
+                ),
+                axis=1,
+            )
+            padded_masks.append(combined)
+
+    elif split_number == 2:
+        added_width = int(list_of_splits[2][0])
+        padding_array = np.zeros([height, added_width])
+        for i in range(len(r["masks"][1, 1, :])):
+            combined = np.concatenate(
+                (padding_array, r["masks"][:, :, i].astype(np.uint8)), axis=1
+            )
+            padded_masks.append(combined)
+
+    # Check shape because splits with no instance dectected have the wrong shape
+
+    output_adj_dict["masks"] = padded_masks
+
+    return output_adj_dict
+
+
+def do_non_max_suppression(results):
+    # The actual nms comes from Tensorflow
+    nms_vec_ndarray = utils.non_max_suppression(
+        results["rois"], results["scores"], threshold=0.5
+    )
+
+    print("the length of nms ndarray is: {}".format(len(nms_vec_ndarray)))
+    # print(nms_vec_ndarray)
+    print("the length of the input array is: {}".format(len(nms_vec_ndarray)))
+
+    # Indexing the input dictionary with the output of non_max_suppression,
+    # which is the list of boxes (and score, class) to keep.
+    out_dic = results.copy()
+    out_dic["rois"] = results["rois"][nms_vec_ndarray].copy()
+    out_dic["scores"] = results["scores"][nms_vec_ndarray].copy()
+    out_dic["class_ids"] = results["class_ids"][nms_vec_ndarray].copy()
+    results["masks"] = np.transpose(results["masks"])
+    out_dic["masks"] = results["masks"][nms_vec_ndarray].copy()
+    out_dic["masks"] = np.transpose(out_dic["masks"])
+
+    # Change to output dictionary
+    return out_dic
+
+
+############################################################
+#  Bitmap
+############################################################
+
+
+def convert_to_bitmap(image, result):
+    """ Converts to bitmap format and annotation format used to create datasets"""
+    segmentation_bitmap = np.zeros((image.shape[0], image.shape[1]), np.uint32)
+    annotations = []
+    counter = 1
+    instances = result["masks"]
+    for i in range(len(result["class_ids"])):
+        class_id = int(result["class_ids"][i])
+        instance_id = counter
+        instance_mask = instances[:, :, i].astype(bool)
+        segmentation_bitmap[instance_mask] = instance_id
+        annotations.append({"id": instance_id, "class_id": class_id})
+        counter += 1
+
+    return segmentation_bitmap, annotations
+
+
+def bitmap2file(bitmap, outpath, image_name):
+    """Convert a label bitmap to a file with the proper format.
+    Args:
+        bitmap (np.uint32): A numpy array where each unique value represents an instance id.
+    Returns:
+        object: a file object.
+    """
+
+    if bitmap.dtype == "uint32":
+        pass
+    elif bitmap.dtype == "uint8":
+        bitmap = np.uint32(bitmap)
+    else:
+        assert False
+
+    bitmap2 = np.copy(bitmap)
+    bitmap2 = bitmap2[:, :, None].view(np.uint8)
+    bitmap2[:, :, 3] = 255
+
+    f = f"{image_name}_label.png"
+    Image.fromarray(bitmap2).save(f, "PNG")
+
+
+############################################################
 #  Detection
 ############################################################
 
 
-def detect(model, dataset_dir, subset):
+def detect(model, dataset_dir, subset, split_num):
     """Run detection on images in the given directory."""
     print("Running on {}".format(dataset_dir))
 
@@ -316,38 +533,81 @@ def detect(model, dataset_dir, subset):
     dataset.load_maize(dataset_dir, subset)
     dataset.prepare()
     # Load over images
-    submission = []
+    predictions_data = []
     for image_id in dataset.image_ids:
         # Load image and run detection
         image = dataset.load_image(image_id)
-        # Detect objects
-        r = model.detect([image], verbose=0)[0]
+        image_name = dataset.image_info[image_id]["id"]
 
-        # Encode image to RLE. Returns a string of multiple lines
-        # source_id = dataset.image_info[image_id]["id"]
-        # rle = mask_to_rle(source_id, r["masks"], r["scores"])
-        # submission.append(rle)
+        # Split the Image with an overlap
+        # Determine the subdividsion of the splits, based on number of splits wanted.
+        # The splits will be a list of set of two numbers, the lower and upper bounds of the splits.
+        splits = get_splits(image.shape[1], split_num, 20)
 
-        # Save image with maskss
+        # Actually split the image into the subdivision determined earlier
+        split_images = spliting_image(image, splits)
+
+        image_split_number = 0
+        ## Run Dectection on each Split
+        for split_image in split_images:
+            # Detect objects
+            r = model.detect([split_image], verbose=0)[0]
+
+            ## Fix relative coordinates
+            adjusted_result = fix_relative_coord(r, splits, image_split_number)
+            adjusted_result = pad_mask(
+                adjusted_result, splits, image_split_number, image_height=image.shape[0]
+            )
+            ## Combine the predicted results
+            if image_split_number == 0:
+                output_result = adjusted_result
+            else:
+                output_result["rois"] = np.concatenate(
+                    (output_result["rois"], adjusted_result["rois"])
+                )
+                output_result["class_ids"] = np.concatenate(
+                    (output_result["class_ids"], adjusted_result["class_ids"])
+                )
+                output_result["scores"] = np.concatenate(
+                    (output_result["scores"], adjusted_result["scores"])
+                )
+            if len(adjusted_result["masks"]) == 0:
+                continue
+            output_result["masks"] = np.concatenate(
+                (output_result["masks"], adjusted_result["masks"])
+            )
+            image_split_number += 1
+
+        ## Remove redundant rois/mask
+        output_result["masks"] = np.transpose(output_result["masks"])
+        output_result["masks"] = np.swapaxes(output_result["masks"], 0, 1)
+        output_result = do_non_max_suppression(output_result)
+
+        # Save preditions bitmap and annotation.json
+        segmentation_bitmap, annotations = convert_to_bitmap(image, output_result)
+        bitmap2file(segmentation_bitmap, dataset_dir, image_name)
+        predictions_data.append({"image_name": image_name, "class_ids": annotations})
+
+        # Save image with masks
         visualize.display_instances(
             image,
-            r["rois"],
-            r["masks"],
-            r["class_ids"],
+            output_result["rois"],
+            output_result["masks"],
+            output_result["class_ids"],
             dataset.class_names,
-            r["scores"],
+            output_result["scores"],
             show_bbox=False,
             show_mask=False,
             title="Predictions",
         )
         plt.savefig("{}/{}.png".format(submit_dir, dataset.image_info[image_id]["id"]))
 
-    # Save to csv file
-    submission = "ImageId,EncodedPixels\n" + "\n".join(submission)
-    file_path = os.path.join(submit_dir, "submit.csv")
-    with open(file_path, "w") as f:
-        f.write(submission)
-    print("Saved to ", submit_dir)
+    # Save to json file
+    file_name = os.path.join(submit_dir, "predictions_annotations.json")
+    with open(file_name, "w") as f:
+        json.dump(predictions_data, f)
+
+    print("Saved predictions_annotations.json to ", dataset_dir)
 
 
 ############################################################
@@ -387,6 +647,14 @@ def main():
         required=False,
         metavar="Dataset sub-directory",
         help="Subset of dataset to run prediction on",
+    )
+    parser.add_argument(
+        "--split_num",
+        required=False,
+        default=1,
+        type=int,
+        metavar="Number of splits",
+        help="Number of splits for prediction",
     )
     args = parser.parse_args()
 
@@ -447,7 +715,7 @@ def main():
     if args.command == "train":
         train(model, config, args.dataset, args.subset)
     elif args.command == "detect":
-        detect(model, args.dataset, args.subset)
+        detect(model, args.dataset, args.subset, args.split_num)
     else:
         print("'{}' is not recognized. " "Use 'train' or 'detect'".format(args.command))
 
