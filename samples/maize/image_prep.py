@@ -169,7 +169,6 @@ def remove_empty_images(image_dir):
             os.remove(osp.join(image_dir, label_id))
 
 
-####FIX MAIN#####
 def main():
     """_summary_
 
@@ -186,6 +185,14 @@ def main():
     parser.add_argument(
         "release_version",
         help="release version to download from Segments.ai",
+        type=str,
+        action="store",
+    )
+
+    parser.add_argument(
+        "filter",
+        choices=["labeled", "unlabeled"],
+        help="filter for Segments.ai",
         type=str,
         action="store",
     )
@@ -224,18 +231,19 @@ def main():
     release_version = args.release_version
     release = client.get_release(dataset_name, release_version)
     dataset = SegmentsDataset(
-        release, filter_by="labeled", segments_dir=args.output_dir
+        release, filter_by=args.filter, segments_dir=args.output_dir
     )
-    dataset_folder = args.dataset_name.replace("/", "_")
-    img_dir = osp.join(args.output_dir, dataset_folder, args.release_version)
-    write_annotations(dataset, img_dir)
+    if args.filter == "labeled":
+        dataset_folder = args.dataset_name.replace("/", "_")
+        img_dir = osp.join(args.output_dir, dataset_folder, args.release_version)
+        write_annotations(dataset, img_dir)
 
-    split_output_dir = osp.join(osp.dirname(args.output_dir), "split")
-    if not osp.exists(split_output_dir):
-        os.makedirs(split_output_dir)
-    image_and_mask_prep(img_dir, 3, split_output_dir)
+        split_output_dir = osp.join(osp.dirname(args.output_dir), "split")
+        if not osp.exists(split_output_dir):
+            os.makedirs(split_output_dir)
+        image_and_mask_prep(img_dir, 3, split_output_dir)
 
-    remove_empty_images(split_output_dir)
+        remove_empty_images(split_output_dir)
 
 
 if __name__ == "__main__":
