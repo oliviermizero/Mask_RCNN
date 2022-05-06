@@ -280,7 +280,7 @@ def train(model, config, dataset_dir, subset):
         dataset_train,
         dataset_val,
         learning_rate=config.LEARNING_RATE,
-        epochs=10,
+        epochs=1,
         augmentation=augmentation,
         layers="heads",
     )
