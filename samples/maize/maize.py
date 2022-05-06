@@ -188,12 +188,11 @@ class MaizeDataset(utils.Dataset):
         for image_id in image_ids:
             image = image_id + ".png"
             # Get class ids
+            class_ids = []
             for annotation in annotations:
                 if annotation["image_name"] == image_id:
                     class_ids = annotation["class_ids"]
                     # continue
-                else:
-                    class_ids = []
 
             self.add_image(
                 "Maize",
