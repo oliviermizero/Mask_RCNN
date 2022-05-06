@@ -354,13 +354,13 @@ def get_splits(image_width, split_number, overlap):
 
 def spliting_image(image_np_array, split_list):
     # The fuction that actually splits the images
-    print(image_np_array.shape)
+    # print(image_np_array.shape)
     array_list = []
 
     for split_nums in split_list:
         left_border = int(split_nums[0])
         right_border = int(split_nums[1])
-        print("Borders:{}, {}".format(left_border, right_border))
+        # print("Borders:{}, {}".format(left_border, right_border))
         sub_array = image_np_array[:, left_border:right_border, :]
         array_list.append(sub_array)
 
@@ -456,9 +456,8 @@ def do_non_max_suppression(results):
         results["rois"], results["scores"], threshold=0.5
     )
 
+    print("the length of the input array is: {}".format(len(results["rois"])))
     print("the length of nms ndarray is: {}".format(len(nms_vec_ndarray)))
-    # print(nms_vec_ndarray)
-    print("the length of the input array is: {}".format(len(nms_vec_ndarray)))
 
     # Indexing the input dictionary with the output of non_max_suppression,
     # which is the list of boxes (and score, class) to keep.
@@ -607,7 +606,6 @@ def detect(model, dataset_dir, subset, split_num):
             show_mask=False,
             title="Predictions",
         )
-        plt.savefig("{}/{}.png".format(submit_dir, dataset.image_info[image_id]["id"]))
 
     # Save to json file
     file_name = os.path.join(submit_dir, "predictions_annotations.json")
