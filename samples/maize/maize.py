@@ -192,6 +192,8 @@ class MaizeDataset(utils.Dataset):
                 if annotation["image_name"] == image_id:
                     class_ids = annotation["class_ids"]
                     # continue
+                else:
+                    class_ids = []
 
             self.add_image(
                 "Maize",
@@ -271,6 +273,10 @@ def train(model, config, dataset_dir, subset):
         ],
     )
 
+    early_stopping_callback = tf.keras.callbacks.EarlyStopping(
+        monitor="val_loss", patience=5, restore_best_weights=True
+    )
+
     # *** This training schedule is an example. Update to your needs ***
 
     # If starting from imagenet, train heads only for a bit
@@ -283,6 +289,7 @@ def train(model, config, dataset_dir, subset):
         epochs=1,
         augmentation=augmentation,
         layers="heads",
+        custom_callbacks=early_stopping_callback,
     )
 
     print("Train all layers")
