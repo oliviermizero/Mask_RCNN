@@ -289,7 +289,6 @@ def train(model, config, dataset_dir, subset):
         epochs=1,
         augmentation=augmentation,
         layers="heads",
-        custom_callbacks=early_stopping_callback,
     )
 
     print("Train all layers")
@@ -300,6 +299,7 @@ def train(model, config, dataset_dir, subset):
         epochs=40,
         augmentation=augmentation,
         layers="all",
+        custom_callbacks=[early_stopping_callback],
     )
 
 
