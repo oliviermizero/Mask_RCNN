@@ -45,6 +45,7 @@ import numpy as np
 import skimage.io
 from PIL import Image
 from imgaug import augmenters as iaa
+import tensorflow as tf
 
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../../")
