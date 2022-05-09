@@ -168,8 +168,6 @@ class MaizeDataset(utils.Dataset):
         assert subset in ["train", "val", "test"]
         if subset == "val":
             image_ids = VAL_IMAGE_IDS
-        elif subset == "test":
-            image_ids = TEST_IMAGE_IDS
         else:
             image_ids = [
                 filename.split(".")[0]
@@ -179,6 +177,7 @@ class MaizeDataset(utils.Dataset):
                     and (filename.split(".")[1] == "png")
                 )
             ]
+        if subset == "train":
             image_ids = list(set(image_ids) - set(VAL_IMAGE_IDS))
 
         annotation_json = osp.join(dataset_dir, annotation_filename)
@@ -193,7 +192,6 @@ class MaizeDataset(utils.Dataset):
             for annotation in annotations:
                 if annotation["image_name"] == image_id:
                     class_ids = annotation["class_ids"]
-                    # continue
 
             self.add_image(
                 "Maize",
@@ -515,6 +513,7 @@ def bitmap2file(bitmap, outpath, image_name):
     bitmap2[:, :, 3] = 255
 
     f = f"{image_name}_label.png"
+    osp.join(outpath, f)
     Image.fromarray(bitmap2).save(f, "PNG")
 
 
@@ -606,6 +605,7 @@ def detect(model, dataset_dir, subset, split_num):
             show_mask=False,
             title="Predictions",
         )
+        plt.savefig("{}/{}.png".format(submit_dir, dataset.image_info[image_id]["id"]))
 
     # Save to json file
     file_name = os.path.join(submit_dir, "predictions_annotations.json")
