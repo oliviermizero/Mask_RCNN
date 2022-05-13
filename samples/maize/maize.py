@@ -36,26 +36,26 @@ if __name__ == "__main__":
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+import datetime
+import json
 import os
 import os.path as osp
 import sys
-import json
-import datetime
+
 import numpy as np
 import skimage.io
-from PIL import Image
-from imgaug import augmenters as iaa
 import tensorflow as tf
+from imgaug import augmenters as iaa
+from PIL import Image
 
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../../")
 
 # Import Mask RCNN
 sys.path.append(ROOT_DIR)  # To find local version of the library
-from mrcnn.config import Config
-from mrcnn import utils
 from mrcnn import model as modellib
-from mrcnn import visualize
+from mrcnn import utils, visualize
+from mrcnn.config import Config
 
 # Path to trained weights file
 COCO_WEIGHTS_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
@@ -272,7 +272,7 @@ def train(model, config, dataset_dir, subset):
     )
 
     early_stopping_callback = tf.keras.callbacks.EarlyStopping(
-        monitor="val_loss", patience=5, restore_best_weights=True
+        monitor="val_loss", patience=20, restore_best_weights=True
     )
 
     # *** This training schedule is an example. Update to your needs ***
@@ -284,7 +284,7 @@ def train(model, config, dataset_dir, subset):
         dataset_train,
         dataset_val,
         learning_rate=config.LEARNING_RATE,
-        epochs=1,
+        epochs=10,
         augmentation=augmentation,
         layers="heads",
     )
@@ -294,7 +294,7 @@ def train(model, config, dataset_dir, subset):
         dataset_train,
         dataset_val,
         learning_rate=config.LEARNING_RATE / 10,
-        epochs=40,
+        epochs=1000,
         augmentation=augmentation,
         layers="all",
         custom_callbacks=[early_stopping_callback],
@@ -553,6 +553,7 @@ def detect(model, dataset_dir, subset, split_num):
         split_images = spliting_image(image, splits)
 
         image_split_number = 0
+        output_result = {"rois": [], "class_ids": [], "masks": np.array}
         ## Run Dectection on each Split
         for split_image in split_images:
             # Detect objects
@@ -606,6 +607,7 @@ def detect(model, dataset_dir, subset, split_num):
             title="Predictions",
         )
         plt.savefig("{}/{}.png".format(submit_dir, dataset.image_info[image_id]["id"]))
+        plt.close()
 
     # Save to json file
     file_name = os.path.join(submit_dir, "predictions_annotations.json")
