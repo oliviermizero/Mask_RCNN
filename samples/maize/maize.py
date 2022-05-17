@@ -13,16 +13,16 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
        the command line as such:
 
     # Train a new model starting from ImageNet weights
-    python3 nucleus.py train --dataset=/path/to/dataset --subset=train --weights=imagenet
+    python maize.py train --dataset=/path/to/dataset --subset=train --weights=imagenet
 
     # Train a new model starting from specific weights file
-    python3 nucleus.py train --dataset=/path/to/dataset --subset=train --weights=/path/to/weights.h5
+    python maize.py train --dataset=/path/to/dataset --subset=train --weights=/path/to/weights.h5
 
     # Resume training a model that you had trained earlier
-    python3 nucleus.py train --dataset=/path/to/dataset --subset=train --weights=last
+    python maize.py train --dataset=/path/to/dataset --subset=train --weights=last
 
     # Generate submission file
-    python3 nucleus.py detect --dataset=/path/to/dataset --subset=train --weights=<last or /path/to/weights.h5>
+    python maize.py detect --dataset=/path/to/dataset --subset=train --weights=<last or /path/to/weights.h5>
 """
 
 # Set matplotlib backend
@@ -144,7 +144,6 @@ class MaizeInferenceConfig(MaizeConfig):
 #  Dataset
 ############################################################
 VAL_IMAGE_IDS = []
-TEST_IMAGE_IDS = []
 
 
 class MaizeDataset(utils.Dataset):
@@ -512,7 +511,7 @@ def bitmap2file(bitmap, outpath, image_name):
     bitmap2 = bitmap2[:, :, None].view(np.uint8)
     bitmap2[:, :, 3] = 255
 
-    f = f"{image_name}_label.png"
+    f = f"{image_name}_pred_label.png"
     osp.join(outpath, f)
     Image.fromarray(bitmap2).save(f, "PNG")
 
@@ -610,7 +609,7 @@ def detect(model, dataset_dir, subset, split_num):
         plt.close()
 
     # Save to json file
-    file_name = os.path.join(submit_dir, "predictions_annotations.json")
+    file_name = os.path.join(dataset_dir, "predictions_annotations.json")
     with open(file_name, "w") as f:
         json.dump(predictions_data, f)
 
