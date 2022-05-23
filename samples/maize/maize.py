@@ -83,7 +83,7 @@ class MaizeConfig(Config):
     # Adjust depending on your GPU memory
     IMAGES_PER_GPU = 1
 
-    # Number of classes (including background)
+    # Number of class_ids (including background)
     NUM_CLASSES = 1 + 2  # Background + Kernel + Ear
 
     # Number of training and validation steps per epoch
@@ -150,7 +150,7 @@ class MaizeDataset(utils.Dataset):
     def load_maize(self, dataset_dir, subset):
 
         # Add the class names using the base method from utils.Dataset
-        """Implement way to add classes from dataset"""
+        """Implement way to add class_ids from dataset"""
         self.add_class("Maize", 1, "kernel")
         self.add_class("Maize", 2, "cob")
 
@@ -283,7 +283,7 @@ def train(model, config, dataset_dir, subset):
         dataset_train,
         dataset_val,
         learning_rate=config.LEARNING_RATE,
-        epochs=10,
+        epochs=5,
         augmentation=augmentation,
         layers="heads",
     )
@@ -367,13 +367,6 @@ def spliting_image(image_np_array, split_list):
 def fix_relative_coord(output_dict, list_of_splits, image_position):
     output_dict_adj = output_dict
 
-    # Getting the image width out of the list of splits (it's the right side of
-    # the last split).
-    image_width = list_of_splits[-1][1]
-
-    # Getting the split width
-    split_width = list_of_splits[image_position][1] - list_of_splits[image_position][0]
-
     # First we get a constant adjustment for the "image position". The
     # adjustment is where the left side of the current image starts, relative
     # to the entire image. We can get this from the list_of_splits.
@@ -447,6 +440,89 @@ def pad_mask(results, list_of_splits, split_number, image_height):
     return output_adj_dict
 
 
+# This function removes the boxes that are near the edges of the splits, in an
+# attempt to remove boxes that are only a fraction of a seed.
+def remove_edge_boxes(output_dict, list_of_splits, image_position):
+    output_dict_rois_removed = output_dict
+    # This is how close the edge of a box can be to the edge of the sub-image
+    # before they get deleted
+    edge_crop_width = 20
+    image_width = list_of_splits[1][1]
+
+    array_counter = 0
+    delete_list = []
+
+    # Pulling out the elements of the output_dict that will get modified
+    adjusted_rois = output_dict["rois"]
+    adjusted_scores = output_dict["scores"]
+    adjusted_classes = output_dict["class_ids"]
+    adjusted_masks = output_dict["masks"]
+
+    # On the leftmost set of boxes, only ones near the right side will be
+    # deleted
+    if image_position == 0:
+        print("\n\nleft image")
+        for box in adjusted_rois:
+            xmax = box[4]
+            if xmax > (image_width - edge_crop_width):
+                # Adding the index to the list of indexes to be deleted
+                delete_list.append(array_counter)
+            array_counter += 1
+        print(len(delete_list))
+
+        adjusted_rois = np.delete(adjusted_rois, delete_list, 0)
+        adjusted_scores = np.delete(adjusted_scores, delete_list, 0)
+        adjusted_classes = np.delete(adjusted_classes, delete_list, 0)
+        adjusted_masks = np.delete(adjusted_masks, delete_list, 2)
+
+    # Rightmost set
+    elif image_position == (len(list_of_splits) - 1):
+        print("\n\nright image")
+        for box in adjusted_rois:
+            xmin = box[1]
+            if xmin < edge_crop_width:
+                # Adding the index to the list of indexes to be deleted
+                delete_list.append(array_counter)
+            array_counter += 1
+        print(len(delete_list))
+
+        adjusted_rois = np.delete(adjusted_rois, delete_list, 0)
+        adjusted_scores = np.delete(adjusted_scores, delete_list, 0)
+        adjusted_classes = np.delete(adjusted_classes, delete_list, 0)
+        adjusted_masks = np.delete(adjusted_masks, delete_list, 2)
+
+    # All the middle sets
+    else:
+        print("\n\nmiddle image")
+        for box in adjusted_rois:
+            xmax = box[3]
+            xmin = box[1]
+            if (xmin < edge_crop_width) or (xmax > (image_width - edge_crop_width)):
+                # Adding the index to the list of indexes to be deleted
+                delete_list.append(array_counter)
+            array_counter += 1
+        print(len(delete_list))
+
+        adjusted_rois = np.delete(adjusted_rois, delete_list, 0)
+        adjusted_scores = np.delete(adjusted_scores, delete_list, 0)
+        adjusted_classes = np.delete(adjusted_classes, delete_list, 0)
+        adjusted_masks = np.delete(adjusted_masks, delete_list, 2)
+
+    # Adding the modified arrays back into the output_dict
+    print("Original array length: ")
+    print(output_dict_rois_removed["rois"].shape[0])
+
+    output_dict_rois_removed["rois"] = adjusted_rois
+    output_dict_rois_removed["scores"] = adjusted_scores
+    output_dict_rois_removed["class_ids"] = adjusted_classes
+    output_dict_rois_removed["masks"] = adjusted_masks
+
+    print("Modified array length: ")
+    print(output_dict_rois_removed["rois"].shape[0])
+
+    return output_dict_rois_removed
+
+
 def do_non_max_suppression(results):
     # The actual nms comes from Tensorflow
     nms_vec_ndarray = utils.non_max_suppression(
@@ -492,30 +568,6 @@ def convert_to_bitmap(image, result):
     return segmentation_bitmap, annotations
 
 
-def bitmap2file(bitmap, outpath, image_name):
-    """Convert a label bitmap to a file with the proper format.
-    Args:
-        bitmap (np.uint32): A numpy array where each unique value represents an instance id.
-    Returns:
-        object: a file object.
-    """
-
-    if bitmap.dtype == "uint32":
-        pass
-    elif bitmap.dtype == "uint8":
-        bitmap = np.uint32(bitmap)
-    else:
-        assert False
-
-    bitmap2 = np.copy(bitmap)
-    bitmap2 = bitmap2[:, :, None].view(np.uint8)
-    bitmap2[:, :, 3] = 255
-
-    f = f"{image_name}_pred_label.png"
-    osp.join(outpath, f)
-    Image.fromarray(bitmap2).save(f, "PNG")
-
-
 ############################################################
 #  Detection
 ############################################################
@@ -559,6 +611,7 @@ def detect(model, dataset_dir, subset, split_num):
             r = model.detect([split_image], verbose=0)[0]
 
             ## Fix relative coordinates
+            adjusted_result = remove_edge_boxes(r, splits, image_split_number)
             adjusted_result = fix_relative_coord(r, splits, image_split_number)
             adjusted_result = pad_mask(
                 adjusted_result, splits, image_split_number, image_height=image.shape[0]
@@ -590,7 +643,9 @@ def detect(model, dataset_dir, subset, split_num):
 
         # Save preditions bitmap and annotation.json
         segmentation_bitmap, annotations = convert_to_bitmap(image, output_result)
-        bitmap2file(segmentation_bitmap, dataset_dir, image_name)
+        f = f"{image_name}_pred_label.png"
+        osp.join(dataset_dir, f)
+        Image.fromarray(segmentation_bitmap).save(f, "PNG")
         predictions_data.append({"image_name": image_name, "class_ids": annotations})
 
         # Save image with masks
@@ -708,7 +763,7 @@ def main():
     print("Loading weights ", weights_path)
     if args.weights.lower() == "coco":
         # Exclude the last layers because they require a matching
-        # number of classes
+        # number of class_ids
         model.load_weights(
             weights_path,
             by_name=True,
