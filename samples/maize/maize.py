@@ -463,7 +463,7 @@ def remove_edge_boxes(output_dict, list_of_splits, image_position):
     if image_position == 0:
         print("\n\nleft image")
         for box in adjusted_rois:
-            xmax = box[4]
+            xmax = box[3]
             if xmax > (image_width - edge_crop_width):
                 # Adding the index to the list of indexes to be deleted
                 delete_list.append(array_counter)
