@@ -403,7 +403,7 @@ class ProposalLayer(KL.Layer):
         return proposals
 
     def compute_output_shape(self, input_shape):
-        return (None, self.proposal_count, 4)
+        return None, self.proposal_count, 4
 
 
 ############################################################
