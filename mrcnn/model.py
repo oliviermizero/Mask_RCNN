@@ -396,10 +396,10 @@ class ProposalLayer(KL.Layer):
 
         proposals = utils.batch_slice([boxes, scores], nms, self.config.IMAGES_PER_GPU)
 
-        if not context.executing_eagerly():
-            # Infer the static output shape:
-            out_shape = self.compute_output_shape(None)
-            proposals.set_shape(out_shape)
+        # if not context.executing_eagerly():
+        #    # Infer the static output shape:
+        #    out_shape = self.compute_output_shape(None)
+        #    proposals.set_shape(out_shape)
         return proposals
 
     def compute_output_shape(self, input_shape):
@@ -2398,7 +2398,6 @@ class MaskRCNN(object):
         exclude: list of layer names to exclude
         """
         import h5py
-
         from tensorflow.python.keras.saving import hdf5_format
 
         if exclude:
@@ -2457,20 +2456,22 @@ class MaskRCNN(object):
         self.keras_model.metrics_tensors = []
         # Optimizer object
         optimizer = keras.optimizers.SGD(
-            lr=learning_rate, momentum=momentum, clipnorm=self.config.GRADIENT_CLIP_NORM
+            learning_rate=learning_rate,
+            momentum=momentum,
+            clipnorm=self.config.GRADIENT_CLIP_NORM,
         )
         # Add Losses
         loss_names = [
             "rpn_class_loss",
             "rpn_bbox_loss",
             "mrcnn_class_loss",
-            "mrcnn_bbox_loss",
+            "mrcnn_bbox_loslossess",
             "mrcnn_mask_loss",
         ]
         for name in loss_names:
             layer = self.keras_model.get_layer(name)
-            # if layer.output in self.keras_model.losses:
-            #     continue
+            if layer.output in self.keras_model.losses:
+                continue
             loss = tf.reduce_mean(
                 input_tensor=layer.output, keepdims=True
             ) * self.config.LOSS_WEIGHTS.get(name, 1.0)
