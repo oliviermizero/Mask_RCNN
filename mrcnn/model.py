@@ -24,6 +24,7 @@ import tensorflow.keras.backend as K
 import tensorflow.keras.layers as KL
 import tensorflow.keras.models as KM
 import tensorflow.keras.utils as KU
+from tensorflow.python.eager import context
 
 from mrcnn import utils
 
@@ -396,10 +397,11 @@ class ProposalLayer(KL.Layer):
 
         proposals = utils.batch_slice([boxes, scores], nms, self.config.IMAGES_PER_GPU)
 
-        # if not context.executing_eagerly():
-        #    # Infer the static output shape:
-        #    out_shape = self.compute_output_shape(None)
-        #    proposals.set_shape(out_shape)
+        if not context.executing_eagerly():
+            # Infer the static output shape:
+            out_shape = self.compute_output_shape(None)
+            proposals.set_shape(out_shape)
+
         return proposals
 
     def compute_output_shape(self, input_shape):
@@ -2465,7 +2467,7 @@ class MaskRCNN(object):
             "rpn_class_loss",
             "rpn_bbox_loss",
             "mrcnn_class_loss",
-            "mrcnn_bbox_loslossess",
+            "mrcnn_bbox_loss",
             "mrcnn_mask_loss",
         ]
         for name in loss_names:
