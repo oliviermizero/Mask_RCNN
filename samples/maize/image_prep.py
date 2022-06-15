@@ -233,7 +233,7 @@ def main():
     dataset = SegmentsDataset(
         release, filter_by=args.filter, segments_dir=args.output_dir
     )
-    if args.filter == "labeled":
+    if args.filter in ["labeled", "reviewed"]:
         dataset_folder = args.dataset_name.replace("/", "_")
         img_dir = osp.join(args.output_dir, dataset_folder, args.release_version)
         write_annotations(dataset, img_dir)

@@ -41,6 +41,7 @@ import json
 import os
 import os.path as osp
 import sys
+import time
 
 import numpy as np
 import skimage.io
@@ -463,7 +464,7 @@ def remove_edge_boxes(output_dict, list_of_splits, image_position):
     if image_position == 0:
         print("\n\nleft image")
         for box in adjusted_rois:
-            xmax = box[4]
+            xmax = box[3]
             if xmax > (image_width - edge_crop_width):
                 # Adding the index to the list of indexes to be deleted
                 delete_list.append(array_counter)
@@ -573,6 +574,56 @@ def convert_to_bitmap(image, result):
 ############################################################
 
 
+def detect_splits(model, image, split_num):
+    # Split the Image with an overlap
+    # Determine the subdividsion of the splits, based on number of splits wanted.
+    # The splits will be a list of set of two numbers, the lower and upper bounds of the splits.
+    splits = get_splits(image.shape[1], split_num, 50)
+
+    # Actually split the image into the subdivision determined earlier
+    split_images = spliting_image(image, splits)
+
+    image_split_number = 0
+    output_result = {"rois": [], "class_ids": [], "masks": np.array}
+    ## Run Dectection on each Split
+    for split_image in split_images:
+        # Detect objects
+        r = model.detect([split_image], verbose=0)[0]
+
+        ## Fix relative coordinates
+        adjusted_result = remove_edge_boxes(r, splits, image_split_number)
+        adjusted_result = fix_relative_coord(r, splits, image_split_number)
+        adjusted_result = pad_mask(
+            adjusted_result, splits, image_split_number, image_height=image.shape[0]
+        )
+        ## Combine the predicted results
+        if image_split_number == 0:
+            output_result = adjusted_result
+        else:
+            output_result["rois"] = np.concatenate(
+                (output_result["rois"], adjusted_result["rois"])
+            )
+            output_result["class_ids"] = np.concatenate(
+                (output_result["class_ids"], adjusted_result["class_ids"])
+            )
+            output_result["scores"] = np.concatenate(
+                (output_result["scores"], adjusted_result["scores"])
+            )
+        if len(adjusted_result["masks"]) == 0:
+            continue
+        output_result["masks"] = np.concatenate(
+            (output_result["masks"], adjusted_result["masks"])
+        )
+        image_split_number += 1
+
+    ## Remove redundant rois/mask
+    output_result["masks"] = np.transpose(output_result["masks"])
+    output_result["masks"] = np.swapaxes(output_result["masks"], 0, 1)
+    output_result = do_non_max_suppression(output_result)
+
+    return output_result
+
+
 def detect(model, dataset_dir, subset, split_num):
     """Run detection on images in the given directory."""
     print("Running on {}".format(dataset_dir))
@@ -595,67 +646,23 @@ def detect(model, dataset_dir, subset, split_num):
         image = dataset.load_image(image_id)
         image_name = dataset.image_info[image_id]["id"]
 
-        # Split the Image with an overlap
-        # Determine the subdividsion of the splits, based on number of splits wanted.
-        # The splits will be a list of set of two numbers, the lower and upper bounds of the splits.
-        splits = get_splits(image.shape[1], split_num, 20)
-
-        # Actually split the image into the subdivision determined earlier
-        split_images = spliting_image(image, splits)
-
-        image_split_number = 0
-        output_result = {"rois": [], "class_ids": [], "masks": np.array}
-        ## Run Dectection on each Split
-        for split_image in split_images:
-            # Detect objects
-            r = model.detect([split_image], verbose=0)[0]
-
-            ## Fix relative coordinates
-            adjusted_result = remove_edge_boxes(r, splits, image_split_number)
-            adjusted_result = fix_relative_coord(r, splits, image_split_number)
-            adjusted_result = pad_mask(
-                adjusted_result, splits, image_split_number, image_height=image.shape[0]
-            )
-            ## Combine the predicted results
-            if image_split_number == 0:
-                output_result = adjusted_result
-            else:
-                output_result["rois"] = np.concatenate(
-                    (output_result["rois"], adjusted_result["rois"])
-                )
-                output_result["class_ids"] = np.concatenate(
-                    (output_result["class_ids"], adjusted_result["class_ids"])
-                )
-                output_result["scores"] = np.concatenate(
-                    (output_result["scores"], adjusted_result["scores"])
-                )
-            if len(adjusted_result["masks"]) == 0:
-                continue
-            output_result["masks"] = np.concatenate(
-                (output_result["masks"], adjusted_result["masks"])
-            )
-            image_split_number += 1
-
-        ## Remove redundant rois/mask
-        output_result["masks"] = np.transpose(output_result["masks"])
-        output_result["masks"] = np.swapaxes(output_result["masks"], 0, 1)
-        output_result = do_non_max_suppression(output_result)
+        results = detect_splits(model, image, split_num)
 
         # Save preditions bitmap and annotation.json
-        segmentation_bitmap, annotations = convert_to_bitmap(image, output_result)
+        segmentation_bitmap, annotations = convert_to_bitmap(image, results)
         f = f"{image_name}_pred_label.png"
-        osp.join(dataset_dir, f)
+        f = osp.join(dataset_dir, f)
         Image.fromarray(segmentation_bitmap).save(f, "PNG")
         predictions_data.append({"image_name": image_name, "class_ids": annotations})
 
         # Save image with masks
         visualize.display_instances(
             image,
-            output_result["rois"],
-            output_result["masks"],
-            output_result["class_ids"],
+            results["rois"],
+            results["masks"],
+            results["class_ids"],
             dataset.class_names,
-            output_result["scores"],
+            results["scores"],
             show_bbox=False,
             show_mask=False,
             title="Predictions",
@@ -672,6 +679,203 @@ def detect(model, dataset_dir, subset, split_num):
 
 
 ############################################################
+#  Evaluate
+############################################################
+# TODO: Fix MaizeEval
+# Currently only temp_eval works
+class MaizeEval:
+    def __init__(self) -> None:
+        pass
+
+    def _prepare(self):
+        pass
+
+    def evaluate(self):
+        """
+        Run per image evaluation on given images and store results (a list of dict) in self.evalImgs
+        :return: None          
+        """
+        pass
+
+    def accumulate(self, p=None):
+        """ 
+        Accumulate per image evaluation results and store the result in self.eval
+        :param p: input params for evaluation
+        :return: None
+        """
+        pass
+
+    def summarize(self):
+        """
+        Compute and display summary metrics for evaluation results.
+        Note this functin can *only* be applied on the default parameter setting
+        """
+        pass
+
+
+def build_maize_results(dataset, image_ids, rois, class_ids, scores, masks):
+    """Arrange resutls to match COCO specs in http://cocodataset.org/#format
+    """
+    # If no results, return an empty list
+    if rois is None:
+        return []
+
+    results = []
+    for image_id in image_ids:
+        # Loop through detections
+        for i in range(rois.shape[0]):
+            class_id = class_ids[i]
+            score = scores[i]
+            bbox = np.around(rois[i], 1)
+            mask = masks[:, :, i]
+
+            result = {
+                "image_id": image_id,
+                "category_id": dataset.get_source_class_id(class_id, "coco"),
+                "bbox": [bbox[1], bbox[0], bbox[3] - bbox[1], bbox[2] - bbox[0]],
+                "score": score,
+                "segmentation": mask,
+            }
+            results.append(result)
+    return results
+
+
+def evaluate_maize(model, dataset, eval_type="bbox", limit=0, image_ids=None):
+    """Runs official COCO evaluation.
+    dataset: A Dataset object with valiadtion data
+    eval_type: "bbox" or "segm" for bounding box or segmentation evaluation
+    limit: if not 0, it's the number of images to use for evaluation
+    """
+    # Pick COCO images from the dataset
+    image_ids = image_ids or dataset.image_ids
+
+    # Limit to a subset
+    if limit:
+        image_ids = image_ids[:limit]
+
+    # Get corresponding COCO image IDs.
+    coco_image_ids = [dataset.image_info[id]["id"] for id in image_ids]
+
+    t_prediction = 0
+    t_start = time.time()
+
+    results = []
+    for i, image_id in enumerate(image_ids):
+        # Load image
+        image = dataset.load_image(image_id)
+
+        # Run detection
+        t = time.time()
+        r = detect_splits(model, image, split_num=3)
+        t_prediction += time.time() - t
+
+        # Convert results to COCO format
+        # Cast masks to uint8 because COCO tools errors out on bool
+        image_results = build_maize_results(
+            dataset,
+            coco_image_ids[i : i + 1],
+            r["rois"],
+            r["class_ids"],
+            r["scores"],
+            r["masks"].astype(np.uint8),
+        )
+        results.extend(image_results)
+
+    # Load results. This modifies results with additional attributes.
+    # coco_results = coco.loadRes(results)
+
+    # Evaluate
+    maizeEval = MaizeEval()
+    maizeEval.evaluate()
+    maizeEval.accumulate()
+    maizeEval.summarize()
+
+    print(
+        "Prediction time: {}. Average {}/image".format(
+            t_prediction, t_prediction / len(image_ids)
+        )
+    )
+    print("Total time: ", time.time() - t_start)
+
+
+def temp_eval(model, dataset, config, limit=0, image_ids=None, type=str):
+
+    image_ids = image_ids or dataset.image_ids
+
+    # Limit to a subset
+    if limit:
+        image_ids = image_ids[:limit]
+
+    if type == "range":
+        image_id = np.random.choice(image_ids)
+        image, image_meta, gt_class_id, gt_bbox, gt_mask = modellib.load_image_gt(
+            dataset, config, image_id, use_mini_mask=False
+        )
+        info = dataset.image_info[image_id]
+
+        # Run object detection
+        r = detect_splits(model, image, split_num=3)
+
+        utils.compute_ap_range(
+            gt_bbox,
+            gt_class_id,
+            gt_mask,
+            r["rois"],
+            r["class_ids"],
+            r["scores"],
+            r["masks"],
+            verbose=1,
+        )
+
+        visualize.display_differences(
+            image,
+            gt_bbox,
+            gt_class_id,
+            gt_mask,
+            r["rois"],
+            r["class_ids"],
+            r["scores"],
+            r["masks"],
+            dataset.class_names,
+            show_box=False,
+            show_mask=False,
+            iou_threshold=0.5,
+            score_threshold=0.5,
+        )
+
+    elif type == "batch":
+        APs = []
+        for image_id in image_ids:
+            image, image_meta, gt_class_id, gt_bbox, gt_mask = modellib.load_image_gt(
+                dataset, config, image_id, use_mini_mask=False
+            )
+            info = dataset.image_info[image_id]
+            print(
+                "image ID: {}.{} ({}) {}".format(
+                    info["source"],
+                    info["id"],
+                    image_id,
+                    dataset.image_reference(image_id),
+                )
+            )
+            # Run object detection
+            r = detect_splits(model, image, split_num=3)
+
+            AP, precisions, recalls, overlaps = utils.compute_ap(
+                gt_bbox,
+                gt_class_id,
+                gt_mask,
+                r["rois"],
+                r["class_ids"],
+                r["scores"],
+                r["masks"],
+            )
+            APs.append(AP)
+
+        return APs
+
+
+############################################################
 #  Command Line
 ############################################################
 
@@ -683,7 +887,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Mask R-CNN for kernel counting and segmentation"
     )
-    parser.add_argument("command", metavar="<command>", help="'train' or 'detect'")
+    parser.add_argument("command", metavar="<command>", help="'train', 'detect'")
     parser.add_argument(
         "--dataset",
         required=False,
