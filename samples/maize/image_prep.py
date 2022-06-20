@@ -191,7 +191,7 @@ def main():
 
     parser.add_argument(
         "filter",
-        choices=["labeled", "unlabeled"],
+        choices=["labeled", "unlabeled", "reviewed"],
         help="filter for Segments.ai",
         type=str,
         action="store",

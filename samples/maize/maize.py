@@ -173,7 +173,7 @@ class MaizeDataset(utils.Dataset):
                 filename.split(".")[0]
                 for filename in filenames
                 if (
-                    (not filename.split("_")[-1] == "label.png")
+                    (not filename.split("_")[-1] in ["ground-truth.png", "label.png"])
                     and (filename.split(".")[1] == "png")
                 )
             ]
@@ -276,18 +276,6 @@ def train(model, config, dataset_dir, subset):
     )
 
     # *** This training schedule is an example. Update to your needs ***
-
-    # If starting from imagenet, train heads only for a bit
-    # since they have random weights
-    print("Train network heads")
-    model.train(
-        dataset_train,
-        dataset_val,
-        learning_rate=config.LEARNING_RATE,
-        epochs=5,
-        augmentation=augmentation,
-        layers="heads",
-    )
 
     print("Train all layers")
     model.train(
