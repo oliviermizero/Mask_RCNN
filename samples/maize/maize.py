@@ -804,8 +804,8 @@ def evaluate_maize(model, dataset, eval_type="bbox", limit=0, image_ids=None):
     print("Total time: ", time.time() - t_start)
 
 
-def temp_eval(model, dataset, config, limit=0, image_ids=None, type=str):
-
+def temp_eval(model, dataset, config, limit=0, image_ids=None, type=str, split_num=3):
+    assert split_num in [1, 3]
     image_ids = image_ids or dataset.image_ids
 
     # Limit to a subset
@@ -820,7 +820,7 @@ def temp_eval(model, dataset, config, limit=0, image_ids=None, type=str):
         info = dataset.image_info[image_id]
 
         # Run object detection
-        r = detect_splits(model, image, split_num=3)
+        r = detect_splits(model, image, split_num)
 
         utils.compute_ap_range(
             gt_bbox,
@@ -865,7 +865,7 @@ def temp_eval(model, dataset, config, limit=0, image_ids=None, type=str):
                 )
             )
             # Run object detection
-            r = detect_splits(model, image, split_num=3)
+            r = detect_splits(model, image, split_num)
 
             AP, precisions, recalls, overlaps = utils.compute_ap(
                 gt_bbox,
