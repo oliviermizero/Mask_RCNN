@@ -1,5 +1,7 @@
-import numpy as np
 from argparse import ArgumentParser
+
+import numpy as np
+
 from maize import MaizeDataset
 
 
@@ -97,7 +99,7 @@ def main():
         "--dataset_dir",
         dest="dataset_dir",
         help="location of images and annotations.",
-        type="string",
+        type=str,
         action="store",
     )
     parser.add_argument(
@@ -105,7 +107,7 @@ def main():
         "--subset",
         dest="subset",
         help="Subset of dataset to use.",
-        type="string",
+        type=str,
         action="store",
     )
     parser.add_argument(
@@ -113,7 +115,7 @@ def main():
         "--output_dir",
         dest="output_dir",
         help="Location to store cvs of features",
-        type="string",
+        type=str,
         action="store",
     )
 
@@ -138,7 +140,7 @@ def main():
 
         kernel_bboxes = extract_bboxes(kernel_masks)
 
-        row_index = build_location_index(kernel_bboxes, "right", kernel_masks)
+        row_index = build_location_index(kernel_bboxes, kernel_masks)
 
         row_count, kernel_per_row, u_location_index = get_row_count(row_index)
         column_count = np.max(kernel_per_row)

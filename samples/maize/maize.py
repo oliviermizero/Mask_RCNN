@@ -213,7 +213,25 @@ class MaizeDataset(utils.Dataset):
         info = self.image_info[image_id]
         # Get mask directory from image path
         image_name = info["id"]
-        bitmap_path = osp.join((osp.dirname(info["path"])), f"{image_name}_label.png")
+        bitmap_path = str
+        if osp.exists(osp.join((osp.dirname(info["path"])), f"{image_name}_label.png")):
+            bitmap_path = osp.join(
+                (osp.dirname(info["path"])), f"{image_name}_label.png"
+            )
+        elif osp.exists(
+            osp.join(
+                (osp.dirname(info["path"])), f"{image_name}_label_ground-truth.png"
+            )
+        ):
+            bitmap_path = osp.join(
+                (osp.dirname(info["path"])), f"{image_name}_label_ground-truth.png"
+            )
+        else:
+            print(
+                "Image labels must have the form *_label.png or *_label-ground-truth.png"
+            )
+            SystemExit()
+
         instances = info["class_ids"]
         # Read mask files from .png image
         mask = []
@@ -325,8 +343,8 @@ def get_splits(image_width, split_number, overlap):
 
         # The middle has no overlap in this case
         middle_split = []
-        middle_split.append(no_overlap_width - (overlap_width / 2))
-        middle_split.append((no_overlap_width * 2) + (overlap_width / 2))
+        middle_split.append(no_overlap_width)
+        middle_split.append((no_overlap_width * 2))
         image_splits.append(middle_split)
 
         # The right split is the opposite of the left split
