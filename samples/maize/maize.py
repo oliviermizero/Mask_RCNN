@@ -154,6 +154,7 @@ class MaizeDataset(utils.Dataset):
         """Implement way to add class_ids from dataset"""
         self.add_class("Maize", 1, "kernel")
         self.add_class("Maize", 2, "cob")
+        self.add_class("Maise", 3, "aborted kernel")
 
         # Get filenames and annotation
         filenames = next(os.walk(dataset_dir))[2]
