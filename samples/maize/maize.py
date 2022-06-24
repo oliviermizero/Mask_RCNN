@@ -85,7 +85,7 @@ class MaizeConfig(Config):
     IMAGES_PER_GPU = 1
 
     # Number of class_ids (including background)
-    NUM_CLASSES = 1 + 2  # Background + Kernel + Ear
+    NUM_CLASSES = 1 + 3  # Background + Kernel + Ear
 
     # Number of training and validation steps per epoch
     STEPS_PER_EPOCH = 1
@@ -112,7 +112,7 @@ class MaizeConfig(Config):
     RPN_NMS_THRESHOLD = 0.9
 
     # How many anchors per image to use for RPN training
-    RPN_TRAIN_ANCHORS_PER_IMAGE = 1000
+    RPN_TRAIN_ANCHORS_PER_IMAGE = 3000
 
     # If enabled, resizes instance masks to a smaller size to reduce
     # memory load. Recommended when using high-resolution images.
@@ -127,10 +127,10 @@ class MaizeConfig(Config):
     TRAIN_ROIS_PER_IMAGE = 170
 
     # Maximum number of ground truth instances to use in one image
-    MAX_GT_INSTANCES = 500
+    MAX_GT_INSTANCES = 2000
 
     # Max number of final detections per image
-    DETECTION_MAX_INSTANCES = 500
+    DETECTION_MAX_INSTANCES = 2000
 
 
 class MaizeInferenceConfig(MaizeConfig):
@@ -153,8 +153,8 @@ class MaizeDataset(utils.Dataset):
         # Add the class names using the base method from utils.Dataset
         """Implement way to add class_ids from dataset"""
         self.add_class("Maize", 1, "kernel")
-        self.add_class("Maize", 2, "cob")
-        self.add_class("Maise", 3, "aborted kernel")
+        # self.add_class("Maize", 2, "cob")
+        # self.add_class("Maise", 3, "aborted kernel")
 
         # Get filenames and annotation
         filenames = next(os.walk(dataset_dir))[2]
@@ -239,10 +239,13 @@ class MaizeDataset(utils.Dataset):
         class_ids = []
         bitmap = skimage.io.imread(bitmap_path)
         for instance in instances:
-            m = np.array(bitmap, np.uint32) == instance["id"]
-            m.astype(bool)
-            mask.append(m)
-            class_ids.append(instance["class_id"])
+            if instance["class_id"] in self.class_ids:
+                m = np.array(bitmap, np.uint32) == instance["id"]
+                m.astype(bool)
+                mask.append(m)
+                class_ids.append(instance["class_id"])
+            else:
+                continue
         mask = np.stack(mask, axis=-1)
         class_ids = np.asarray(class_ids, dtype=np.int32)
 
