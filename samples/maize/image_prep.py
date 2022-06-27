@@ -1,16 +1,15 @@
+import json
 import os
 import os.path as osp
-import json
-import numpy as np
 from argparse import ArgumentParser
-from skimage.measure import regionprops
+
+import numpy as np
 from PIL import Image
-
-
 from segments import SegmentsClient, SegmentsDataset
+from skimage.measure import regionprops
 
 
-def write_annotations(dataset, output_dir):
+def write_annotations(dataset, output_dir, classes):
     """ Creates the annotation file for the full images
         
     output json file formatt
@@ -21,9 +20,10 @@ def write_annotations(dataset, output_dir):
         image_name = sample["file_name"].split(".")[0]
         class_ids = []
         for instance in sample["annotations"]:
-            class_ids.append(
-                {"id": instance.get("id"), "class_id": instance.get("category_id")}
-            )
+            if instance.get("category_id") in classes:
+                class_ids.append(
+                    {"id": instance.get("id"), "class_id": instance.get("category_id")}
+                )
 
         annotation = {"image_name": image_name, "class_ids": class_ids}
         json_data.append(annotation)
@@ -217,6 +217,16 @@ def main():
         action="store",
     )
 
+    parser.add_argument(
+        "-c",
+        "--classes",
+        dest="classes",
+        help="classes you want to keep annotations from.",
+        default="[1]",
+        type=list,
+        action="store",
+    )
+
     args = parser.parse_args()
 
     def bailout():
@@ -236,7 +246,7 @@ def main():
     if args.filter in ["labeled", "reviewed"]:
         dataset_folder = args.dataset_name.replace("/", "_")
         img_dir = osp.join(args.output_dir, dataset_folder, args.release_version)
-        write_annotations(dataset, img_dir)
+        write_annotations(dataset, img_dir, classes=args.classes)
 
         split_output_dir = osp.join(osp.dirname(args.output_dir), "split")
         if not osp.exists(split_output_dir):
