@@ -145,6 +145,7 @@ class MaizeInferenceConfig(MaizeConfig):
 #  Dataset
 ############################################################
 VAL_IMAGE_IDS = []
+LIST_IMAGE_IDS = []
 
 
 class MaizeDataset(utils.Dataset):
@@ -166,9 +167,11 @@ class MaizeDataset(utils.Dataset):
         # "val":
         # "train":
         # else: use the data from the specified sub-directory
-        assert subset in ["train", "val", "test"]
+        assert subset in ["train", "val", "test", "list"]
         if subset == "val":
             image_ids = VAL_IMAGE_IDS
+        elif subset == "list":
+            image_ids = LIST_IMAGE_IDS
         else:
             image_ids = [
                 filename.split(".")[0]
