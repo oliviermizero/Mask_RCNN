@@ -20,7 +20,7 @@ def write_annotations(dataset, output_dir, classes):
         image_name = sample["file_name"].split(".")[0]
         class_ids = []
         for instance in sample["annotations"]:
-            if instance.get("category_id") in classes:
+            if str(instance.get("category_id")) in classes:
                 class_ids.append(
                     {"id": instance.get("id"), "class_id": instance.get("category_id")}
                 )
