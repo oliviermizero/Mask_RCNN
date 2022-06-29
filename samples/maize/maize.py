@@ -85,7 +85,7 @@ class MaizeConfig(Config):
     IMAGES_PER_GPU = 1
 
     # Number of class_ids (including background)
-    NUM_CLASSES = 1 + 3  # Background + Kernel + Ear
+    NUM_CLASSES = 1 + 3  # Background + Kernel, Cob Space, Aborted Kernel
 
     # Number of training and validation steps per epoch
     STEPS_PER_EPOCH = 1
@@ -205,7 +205,7 @@ class MaizeDataset(utils.Dataset):
             )
 
     def load_mask(self, image_id):
-        """ Load instance masks for the given image.
+        """Load instance masks for the given image.
         MaskRCNN expects masks in the form of a bitmap [height, width, instances].
         Args:
             image_id: The id of the image to load masks for
@@ -350,8 +350,8 @@ def get_splits(image_width, split_number, overlap):
 
         # The middle has no overlap in this case
         middle_split = []
-        middle_split.append(no_overlap_width)
-        middle_split.append((no_overlap_width * 2))
+        middle_split.append(no_overlap_width - overlap)
+        middle_split.append((no_overlap_width * 2) + overlap)
         image_splits.append(middle_split)
 
         # The right split is the opposite of the left split
@@ -447,7 +447,7 @@ def pad_mask(results, list_of_splits, split_number, image_height):
             )
             padded_masks.append(combined)
 
-    # Check shape because splits with no instance dectected have the wrong shape
+    # Todo: Check shape because splits with no instance dectected have the wrong shape
 
     output_adj_dict["masks"] = padded_masks
 
@@ -566,7 +566,7 @@ def do_non_max_suppression(results):
 
 
 def convert_to_bitmap(image, result):
-    """ Converts to bitmap format and annotation format used to create datasets"""
+    """Converts to bitmap format and annotation format used to create datasets"""
     segmentation_bitmap = np.zeros((image.shape[0], image.shape[1]), np.uint32)
     annotations = []
     counter = 1
@@ -622,11 +622,11 @@ def detect_splits(model, image, split_num):
             output_result["scores"] = np.concatenate(
                 (output_result["scores"], adjusted_result["scores"])
             )
-        if len(adjusted_result["masks"]) == 0:
-            continue
-        output_result["masks"] = np.concatenate(
-            (output_result["masks"], adjusted_result["masks"])
-        )
+            if len(adjusted_result["masks"]) == 0:
+                continue
+            output_result["masks"] = np.concatenate(
+                (output_result["masks"], adjusted_result["masks"])
+            )
         image_split_number += 1
 
     ## Remove redundant rois/mask
@@ -706,12 +706,12 @@ class MaizeEval:
     def evaluate(self):
         """
         Run per image evaluation on given images and store results (a list of dict) in self.evalImgs
-        :return: None          
+        :return: None
         """
         pass
 
     def accumulate(self, p=None):
-        """ 
+        """
         Accumulate per image evaluation results and store the result in self.eval
         :param p: input params for evaluation
         :return: None
@@ -727,8 +727,7 @@ class MaizeEval:
 
 
 def build_maize_results(dataset, image_ids, rois, class_ids, scores, masks):
-    """Arrange resutls to match COCO specs in http://cocodataset.org/#format
-    """
+    """Arrange resutls to match COCO specs in http://cocodataset.org/#format"""
     # If no results, return an empty list
     if rois is None:
         return []
