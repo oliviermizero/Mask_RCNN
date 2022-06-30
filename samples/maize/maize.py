@@ -97,8 +97,8 @@ class MaizeConfig(Config):
 
     # Input image resizing
     # Random crops of size 512x512
-    IMAGE_MIN_DIM = 1024
-    IMAGE_MAX_DIM = 1024
+    IMAGE_MIN_DIM = 512
+    IMAGE_MAX_DIM = 512
 
     # Length of square anchor side in pixels
     RPN_ANCHOR_SCALES = (16, 32, 64, 128, 256)
@@ -915,7 +915,7 @@ def main():
     parser.add_argument(
         "--logs",
         required=False,
-        default=DEFAULT_LOGS_DIR,
+        default="../../logs",
         metavar="/path/to/logs/",
         help="Logs and checkpoints directory (default=logs/)",
     )
