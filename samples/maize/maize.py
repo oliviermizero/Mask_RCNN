@@ -475,14 +475,14 @@ def remove_edge_boxes(output_dict, list_of_splits, image_position):
     # On the leftmost set of boxes, only ones near the right side will be
     # deleted
     if image_position == 0:
-        print("\n\nleft image")
+        # print("\n\nleft image")
         for box in adjusted_rois:
             xmax = box[3]
             if xmax > (image_width - edge_crop_width):
                 # Adding the index to the list of indexes to be deleted
                 delete_list.append(array_counter)
             array_counter += 1
-        print(len(delete_list))
+        # print(len(delete_list))
 
         adjusted_rois = np.delete(adjusted_rois, delete_list, 0)
         adjusted_scores = np.delete(adjusted_scores, delete_list, 0)
@@ -491,14 +491,14 @@ def remove_edge_boxes(output_dict, list_of_splits, image_position):
 
     # Rightmost set
     elif image_position == (len(list_of_splits) - 1):
-        print("\n\nright image")
+        # print("\n\nright image")
         for box in adjusted_rois:
             xmin = box[1]
             if xmin < edge_crop_width:
                 # Adding the index to the list of indexes to be deleted
                 delete_list.append(array_counter)
             array_counter += 1
-        print(len(delete_list))
+        # print(len(delete_list))
 
         adjusted_rois = np.delete(adjusted_rois, delete_list, 0)
         adjusted_scores = np.delete(adjusted_scores, delete_list, 0)
@@ -507,7 +507,7 @@ def remove_edge_boxes(output_dict, list_of_splits, image_position):
 
     # All the middle sets
     else:
-        print("\n\nmiddle image")
+        # print("\n\nmiddle image")
         for box in adjusted_rois:
             xmax = box[3]
             xmin = box[1]
@@ -515,7 +515,7 @@ def remove_edge_boxes(output_dict, list_of_splits, image_position):
                 # Adding the index to the list of indexes to be deleted
                 delete_list.append(array_counter)
             array_counter += 1
-        print(len(delete_list))
+        # print(len(delete_list))
 
         adjusted_rois = np.delete(adjusted_rois, delete_list, 0)
         adjusted_scores = np.delete(adjusted_scores, delete_list, 0)
@@ -523,16 +523,16 @@ def remove_edge_boxes(output_dict, list_of_splits, image_position):
         adjusted_masks = np.delete(adjusted_masks, delete_list, 2)
 
     # Adding the modified arrays back into the output_dict
-    print("Original array length: ")
-    print(output_dict_rois_removed["rois"].shape[0])
+    # print("Original array length: ")
+    # print(output_dict_rois_removed["rois"].shape[0])
 
     output_dict_rois_removed["rois"] = adjusted_rois
     output_dict_rois_removed["scores"] = adjusted_scores
     output_dict_rois_removed["class_ids"] = adjusted_classes
     output_dict_rois_removed["masks"] = adjusted_masks
 
-    print("Modified array length: ")
-    print(output_dict_rois_removed["rois"].shape[0])
+    # print("Modified array length: ")
+    # print(output_dict_rois_removed["rois"].shape[0])
 
     return output_dict_rois_removed
 
