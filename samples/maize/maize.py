@@ -85,7 +85,7 @@ class MaizeConfig(Config):
     IMAGES_PER_GPU = 1
 
     # Number of class_ids (including background)
-    NUM_CLASSES = 1 + 3  # Background + Kernel, Cob Space, Aborted Kernel
+    NUM_CLASSES = 1 + 1  # Background + Kernel, Cob Space, Aborted Kernel
 
     # Number of training and validation steps per epoch
     STEPS_PER_EPOCH = 1
