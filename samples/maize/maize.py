@@ -695,6 +695,7 @@ def detect(model, dataset_dir, subset, split_num):
 #  Evaluate
 ############################################################
 # TODO: Fix MaizeEval
+# TODO: Add Recall measurements
 # Currently only temp_eval works
 class MaizeEval:
     def __init__(self) -> None:
