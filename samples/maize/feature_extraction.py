@@ -1,5 +1,11 @@
-import numpy as np
+"""
+Feature Extraction 
+"""
 from argparse import ArgumentParser
+
+import mrcnn.visualize as visualize
+import numpy as np
+
 from maize import MaizeDataset
 
 
@@ -41,6 +47,7 @@ def extract_bboxes(mask):
     return boxes.astype(np.int32)
 
 
+# TODO: Implement new Method of calulating relative kernel location
 def build_location_index(bboxes, masks):
     """Builds list of kernel ids sorted based on location top left->top right"""
     location_array = []
@@ -97,7 +104,7 @@ def main():
         "--dataset_dir",
         dest="dataset_dir",
         help="location of images and annotations.",
-        type="string",
+        type=str,
         action="store",
     )
     parser.add_argument(
@@ -105,7 +112,7 @@ def main():
         "--subset",
         dest="subset",
         help="Subset of dataset to use.",
-        type="string",
+        type=str,
         action="store",
     )
     parser.add_argument(
@@ -113,7 +120,7 @@ def main():
         "--output_dir",
         dest="output_dir",
         help="Location to store cvs of features",
-        type="string",
+        type=str,
         action="store",
     )
 
@@ -124,26 +131,48 @@ def main():
     dataset.load_maize(dataset_dir, args.subset)
     dataset.prepare()
 
+    generated_data = []
     for image_id in dataset.image_ids:
+        image = dataset.load_image(image_id)
+        image_name = dataset.image_info[image_id]["id"]
         masks, class_ids = dataset.load_mask(image_id)
 
         ear_fill = percent_ear_fill(masks, class_ids)
-        print(ear_fill)
+        masks = masks.swapaxes(0, 2)
 
         kernel_masks = np.array(
-            [kmask for kmask, class_id in zip(masks, class_ids) if class_id == 1]
+            [mask for mask, class_id in zip(masks, class_ids) if class_id == 1]
         )
+        masks = masks.swapaxes(0, 2)
+        kernel_masks = kernel_masks.transpose()
+
         kernel_masks = kernel_masks.transpose()
         kernel_masks = kernel_masks.swapaxes(0, 1)
 
+        kernel_count = kernel_masks.shape[2]
+
         kernel_bboxes = extract_bboxes(kernel_masks)
 
-        row_index = build_location_index(kernel_bboxes, "right", kernel_masks)
+        row_index = build_location_index(kernel_bboxes, kernel_masks)
 
         row_count, kernel_per_row, u_location_index = get_row_count(row_index)
         column_count = np.max(kernel_per_row)
 
-        print(row_count, column_count)
+        generated_data.append(
+            {
+                "Image name": image_name,
+                "Percent Ear Fill": ear_fill,
+                "Number of Kernels": kernel_count,
+                "Number of Rows": row_count,
+                "Number of Kernels Per Row": column_count,
+            }
+        )
+        print(
+            f"Image name: {image_name} \n Percent Ear Fill: {ear_fill} \n Number of Kernels: {kernel_count} \n Number of Rows: {row_count} \n Number of Kernels Per Row: {column_count}"
+        )
+        visualize.display_top_masks(
+            image, masks, class_ids, dataset.class_names, limit=2
+        )
 
 
 if __name__ == "__main__":

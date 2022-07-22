@@ -1,16 +1,20 @@
+"""
+Image and Label prep. Labels are currently stored in Segment.ai.
+
+This script will download and split the images and labels, and prepare the annotations for Mask_RCNN
+"""
+import json
 import os
 import os.path as osp
-import json
-import numpy as np
 from argparse import ArgumentParser
-from skimage.measure import regionprops
+
+import numpy as np
 from PIL import Image
-
-
 from segments import SegmentsClient, SegmentsDataset
+from skimage.measure import regionprops
 
 
-def write_annotations(dataset, output_dir):
+def write_annotations(dataset, output_dir, classes):
     """ Creates the annotation file for the full images
         
     output json file formatt
@@ -21,9 +25,10 @@ def write_annotations(dataset, output_dir):
         image_name = sample["file_name"].split(".")[0]
         class_ids = []
         for instance in sample["annotations"]:
-            class_ids.append(
-                {"id": instance.get("id"), "class_id": instance.get("category_id")}
-            )
+            if str(instance.get("category_id")) in classes:
+                class_ids.append(
+                    {"id": instance.get("id"), "class_id": instance.get("category_id")}
+                )
 
         annotation = {"image_name": image_name, "class_ids": class_ids}
         json_data.append(annotation)
@@ -78,8 +83,11 @@ def split_annotations(split_name, split_label_array, annotation_json, output_dir
                     class_ids.append(
                         {"id": class_id.get("id"), "class_id": class_id.get("class_id")}
                     )
-
-    split_annotations = {"image_name": split_name, "class_ids": class_ids}
+    if len(class_ids) == 0:
+        print(f"No labels found on {split_name}")
+        return
+    else:
+        split_annotations = {"image_name": split_name, "class_ids": class_ids}
 
     file_name = os.path.join(output_dir, "split_annotations.json")
     if osp.exists(file_name):
@@ -94,56 +102,41 @@ def split_annotations(split_name, split_label_array, annotation_json, output_dir
     print("Added {} annotation to {}".format(split_name, file_name))
 
 
-def image_and_mask_prep(image_dir, split_number, output_dir):
-    assert (
-        not image_dir is output_dir
-    ), "The image directory and the output directory must be different"
-    annotation_json = osp.join(image_dir, "full_annotations.json")
-    assert osp.exists(
-        annotation_json
-    ), f"{annotation_json} not found. Annotation file must be in the image dir and have name 'full_annotations'"
-
-    print("\nProcessing images...")
-    image_ids = next(os.walk(image_dir))[2]
-    for image_id in image_ids:
-        if len(image_id.split("_")) > 3 or image_id.split(".")[1] == "json":
-            continue
-        image_name = image_id.split(".")[0]
-        image_path = osp.join(image_dir, image_id)
-        label_name = image_name + "_label_ground-truth.png"
-        label_path = osp.join(image_dir, label_name)
-
-        # Opened image and label and convert them to numpy array
-        with Image.open(image_path) as image_data:
-            image_array = np.array(image_data)
-        with Image.open(label_path) as label_data:
-            label_array = np.array(label_data)
-
-        assert (
-            image_array[:, :, 1].shape == label_array.shape
-        ), f"{image_array.shape} is not equal to {label_array.shape}"
-
-        # Split image and label
-        split_image = np.array_split(image_array, split_number, axis=1)
-        split_label = np.array_split(label_array, split_number, axis=1)
-
-        # Save Splits
-        save_split_images(split_image, output_dir, image_name)
-        save_split_images(split_label, output_dir, label_name.split(".")[0])
-
-        # Generate class annotations for the label images
-        for split_n, split in enumerate(split_label):
-            split_name = "{}_s{}".format(image_name, str(split_n + 1))
-            split_annotations(split_name, split, annotation_json, output_dir)
-
-
-####FIX MAIN#####
-def main():
+def remove_empty_images(image_dir):
     """_summary_
 
-  Raises:
-      SystemExit: _description_
-  """
+    Args:
+        image_dir (_type_): _description_
+    """
+    filenames = next(os.walk(image_dir))[2]
+
+    annotation_filename = [
+        filename for filename in filenames if filename.split(".")[1] == "json"
+    ][0]
+
+    with open(osp.join(image_dir, annotation_filename), "r") as f:
+        annotations = json.load(f)
+
+    image_ids = [
+        filename
+        for filename in filenames
+        if (
+            (not filename.split("_")[-1] == "label.png")
+            and (filename.split(".")[1] == "png")
+        )
+    ]
+
+    annotated_images = [annotation["image_name"] for annotation in annotations]
+    for image_id in image_ids:
+        if image_id.split(".")[0] in annotated_images:
+            continue
+        else:
+            os.remove(osp.join(image_dir, image_id))
+            label_id = "{}_label.png".format(image_id.split(".")[0])
+            os.remove(osp.join(image_dir, label_id))
+
+
+def main():
 
     parser = ArgumentParser()
 
@@ -154,6 +147,14 @@ def main():
     parser.add_argument(
         "release_version",
         help="release version to download from Segments.ai",
+        type=str,
+        action="store",
+    )
+
+    parser.add_argument(
+        "filter",
+        choices=["labeled", "unlabeled", "reviewed"],
+        help="filter for Segments.ai",
         type=str,
         action="store",
     )
@@ -178,6 +179,16 @@ def main():
         action="store",
     )
 
+    parser.add_argument(
+        "-c",
+        "--classes",
+        dest="classes",
+        help="classes you want to keep annotations from.",
+        default="[1]",
+        type=list,
+        action="store",
+    )
+
     args = parser.parse_args()
 
     def bailout():
@@ -192,16 +203,59 @@ def main():
     release_version = args.release_version
     release = client.get_release(dataset_name, release_version)
     dataset = SegmentsDataset(
-        release, filter_by="labeled", segments_dir=args.output_dir
+        release, filter_by=args.filter, segments_dir=args.output_dir
     )
-    dataset_folder = args.dataset_name.replace("/", "_")
-    img_dir = osp.join(args.output_dir, dataset_folder, args.release_version)
-    write_annotations(dataset, img_dir)
+    if args.filter in ["labeled", "reviewed"]:
+        dataset_folder = args.dataset_name.replace("/", "_")
+        img_dir = osp.join(args.output_dir, dataset_folder, args.release_version)
+        write_annotations(dataset, img_dir, classes=args.classes)
 
-    split_output_dir = osp.join(osp.dirname(args.output_dir), "split")
-    if not osp.exists(split_output_dir):
-        os.makedirs(split_output_dir)
-    image_and_mask_prep(img_dir, 3, split_output_dir)
+        split_output_dir = osp.join(osp.dirname(args.output_dir), "split")
+        if not osp.exists(split_output_dir):
+            os.makedirs(split_output_dir)
+
+        assert (
+            not img_dir is split_output_dir
+        ), "The image directory and the output directory must be different"
+        annotation_json = osp.join(img_dir, "full_annotations.json")
+        assert osp.exists(
+            annotation_json
+        ), f"{annotation_json} not found. Annotation file must be in the image dir and have name 'full_annotations'"
+
+        print("\nProcessing images...")
+        image_ids = next(os.walk(img_dir))[2]
+        for image_id in image_ids:
+            if len(image_id.split("_")) > 3 or image_id.split(".")[1] == "json":
+                continue
+            image_name = image_id.split(".")[0]
+            image_path = osp.join(img_dir, image_id)
+            label_name = image_name + "_label_ground-truth.png"
+            label_path = osp.join(img_dir, label_name)
+
+            # Opened image and label and convert them to numpy array
+            with Image.open(image_path) as image_data:
+                image_array = np.array(image_data)
+            with Image.open(label_path) as label_data:
+                label_array = np.array(label_data)
+
+            assert (
+                image_array[:, :, 1].shape == label_array.shape
+            ), f"{image_array.shape} is not equal to {label_array.shape}"
+
+            # Split image and label
+            split_image = np.array_split(image_array, 3, axis=1)
+            split_label = np.array_split(label_array, 3, axis=1)
+
+            # Save Splits
+            save_split_images(split_image, split_output_dir, image_name)
+            save_split_images(split_label, split_output_dir, label_name.split(".")[0])
+
+            # Generate class annotations for the label images
+            for split_n, split in enumerate(split_label):
+                split_name = "{}_s{}".format(image_name, str(split_n + 1))
+                split_annotations(split_name, split, annotation_json, split_output_dir)
+
+        remove_empty_images(split_output_dir)
 
 
 if __name__ == "__main__":
