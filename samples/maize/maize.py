@@ -1,11 +1,10 @@
 """
 Mask R-CNN
-Train on the nuclei segmentation dataset from the
-Kaggle 2018 Data Science Bowl
-https://www.kaggle.com/c/data-science-bowl-2018/
+Train on the maize segmentation dataset
 
 Licensed under the MIT License (see LICENSE for details)
 Written by Waleed Abdulla
+Adapted by Clay Christenson
 
 ------------------------------------------------------------
 
@@ -21,8 +20,8 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
     # Resume training a model that you had trained earlier
     python maize.py train --dataset=/path/to/dataset --subset=train --weights=last
 
-    # Generate submission file
-    python maize.py detect --dataset=/path/to/dataset --subset=train --weights=<last or /path/to/weights.h5>
+    # Generate dectections
+    python maize.py detect --dataset=/path/to/dataset --subset=train --weights=<last or /path/to/weights.h5> --split_num=number of splits
 """
 
 # Set matplotlib backend
@@ -48,6 +47,7 @@ import skimage.io
 import tensorflow as tf
 from imgaug import augmenters as iaa
 from PIL import Image
+from sklearn import metrics
 
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../../")
@@ -85,7 +85,7 @@ class MaizeConfig(Config):
     IMAGES_PER_GPU = 1
 
     # Number of class_ids (including background)
-    NUM_CLASSES = 1 + 1  # Background + Kernel, Cob Space, Aborted Kernel
+    NUM_CLASSES = 1 + 1  # Background + Kernel
 
     # Number of training and validation steps per epoch
     STEPS_PER_EPOCH = 1
@@ -134,6 +134,8 @@ class MaizeConfig(Config):
 
 
 class MaizeInferenceConfig(MaizeConfig):
+    """Configuration for detection on the maize segmentation dataset."""
+
     # Set batch size to 1 since we'll be running inference on
     # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
     GPU_COUNT = 1
@@ -149,13 +151,24 @@ LIST_IMAGE_IDS = []
 
 
 class MaizeDataset(utils.Dataset):
+    """ Used to create Maize Datasets, set the classes, and load the images and their masks
+
+        Note:
+        Set Validation and or List images IDS before running.
+        Use LIST_IMAGE_IDS to load a dataset with a specfic set of images
+        
+        To add new classes simply uncomment the self.add_class(_,#,"name of class"), and change the name to whatever you need.
+        
+        Check and make sure the images, and their mask are displaying correctly before training.
+    """
+
     def load_maize(self, dataset_dir, subset):
 
         # Add the class names using the base method from utils.Dataset
         """Implement way to add class_ids from dataset"""
         self.add_class("Maize", 1, "kernel")
         # self.add_class("Maize", 2, "cob")
-        # self.add_class("Maise", 3, "aborted kernel")
+        # self.add_class("Maize", 3, "aborted kernel")
 
         # Get filenames and annotation
         filenames = next(os.walk(dataset_dir))[2]
@@ -164,8 +177,10 @@ class MaizeDataset(utils.Dataset):
         ][0]
 
         # Which subset?
-        # "val":
-        # "train":
+        # "val": Only images in VAL_IMAGE_IDS
+        # "train": All images in dataset_dir except VAL
+        # "test": All images in dataset_dir
+        # "list": Only images in LIST_IMAGE_IDS
         # else: use the data from the specified sub-directory
         assert subset in ["train", "val", "test", "list"]
         if subset == "val":
@@ -206,7 +221,14 @@ class MaizeDataset(utils.Dataset):
 
     def load_mask(self, image_id):
         """Load instance masks for the given image.
+        
         MaskRCNN expects masks in the form of a bitmap [height, width, instances].
+        
+        This load_mask function converts the full label bitmap to the correct format for the model. 
+        If you image labels are formatted in a different way you may need to adjust this to load the mask correctly.
+        
+        Bitmap file name must be image_name_label.png or image_name_label_ground-truth.png
+        
         Args:
             image_id: The id of the image to load masks for
         Returns:
@@ -296,6 +318,7 @@ def train(model, config, dataset_dir, subset):
         ],
     )
 
+    # Implementation of early stopping
     early_stopping_callback = tf.keras.callbacks.EarlyStopping(
         monitor="val_loss", patience=20, restore_best_weights=True
     )
@@ -316,6 +339,7 @@ def train(model, config, dataset_dir, subset):
 
 ############################################################
 #  Image spliting
+#  This code is adapted from EarVision written by Cedar Warman
 ############################################################
 
 
@@ -365,13 +389,11 @@ def get_splits(image_width, split_number, overlap):
 
 def spliting_image(image_np_array, split_list):
     # The fuction that actually splits the images
-    # print(image_np_array.shape)
     array_list = []
 
     for split_nums in split_list:
         left_border = int(split_nums[0])
         right_border = int(split_nums[1])
-        # print("Borders:{}, {}".format(left_border, right_border))
         sub_array = image_np_array[:, left_border:right_border, :]
         array_list.append(sub_array)
 
@@ -454,9 +476,9 @@ def pad_mask(results, list_of_splits, split_number, image_height):
     return output_adj_dict
 
 
-# This function removes the boxes that are near the edges of the splits, in an
-# attempt to remove boxes that are only a fraction of a seed.
 def remove_edge_boxes(output_dict, list_of_splits, image_position):
+    # This function removes the boxes that are near the edges of the splits, in an
+    # attempt to remove boxes that are only a fraction of a seed.
     output_dict_rois_removed = output_dict
     # This is how close the edge of a box can be to the edge of the sub-image
     # before they get deleted
@@ -566,7 +588,7 @@ def do_non_max_suppression(results):
 
 
 def convert_to_bitmap(image, result):
-    """Converts to bitmap format and annotation format used to create datasets"""
+    """Converts results to bitmap format and annotation format used to create datasets"""
     segmentation_bitmap = np.zeros((image.shape[0], image.shape[1]), np.uint32)
     annotations = []
     counter = 1
@@ -588,6 +610,8 @@ def convert_to_bitmap(image, result):
 
 
 def detect_splits(model, image, split_num):
+    """Run detection of images splits and combine results"""
+
     # Split the Image with an overlap
     # Determine the subdividsion of the splits, based on number of splits wanted.
     # The splits will be a list of set of two numbers, the lower and upper bounds of the splits.
@@ -695,8 +719,6 @@ def detect(model, dataset_dir, subset, split_num):
 #  Evaluate
 ############################################################
 # TODO: Fix MaizeEval
-# TODO: Add Recall measurements
-# Currently only temp_eval works
 class MaizeEval:
     def __init__(self) -> None:
         pass
@@ -811,13 +833,50 @@ def evaluate_maize(model, dataset, eval_type="bbox", limit=0, image_ids=None):
     print("Total time: ", time.time() - t_start)
 
 
-def temp_eval(model, dataset, config, limit=0, image_ids=None, type=str, split_num=3):
+def compute_ar(pred_boxes, gt_boxes, list_iou_thresholds):
+    """Used to compute average recall"""
+    AR = []
+    for iou_threshold in list_iou_thresholds:
+
+        try:
+            recall, _ = utils.compute_recall(pred_boxes, gt_boxes, iou=iou_threshold)
+
+            AR.append(recall)
+
+        except:
+            AR.append(0.0)
+            pass
+
+    AUC = 2 * (metrics.auc(list_iou_thresholds, AR))
+    return AUC
+
+
+def evaluate_model(
+    model,
+    dataset,
+    config,
+    limit=0,
+    image_ids=None,
+    type=str,
+    split_num=3,
+    list_iou_thresholds=None,
+):
+    """Evalute the model
+
+    Args:
+        limit (int, optional): To evaluate on a subset of the dataset. Defaults to the whole dataset.
+        type (str, optional): Use "range" to evalute single image, Use "batch to evalute set of images.
+    """
+    assert type in ["range", "batch"]
     assert split_num in [1, 3]
     image_ids = image_ids or dataset.image_ids
 
     # Limit to a subset
     if limit:
         image_ids = image_ids[:limit]
+
+    if list_iou_thresholds is None:
+        list_iou_thresholds = np.arange(0.5, 1.01, 0.1)
 
     if type == "range":
         image_id = np.random.choice(image_ids)
@@ -857,6 +916,7 @@ def temp_eval(model, dataset, config, limit=0, image_ids=None, type=str, split_n
         )
 
     elif type == "batch":
+        ARs = []
         APs = []
         for image_id in image_ids:
             image, image_meta, gt_class_id, gt_bbox, gt_mask = modellib.load_image_gt(
@@ -883,9 +943,15 @@ def temp_eval(model, dataset, config, limit=0, image_ids=None, type=str, split_n
                 r["scores"],
                 r["masks"],
             )
+
+            AR = compute_ar(r["rois"], gt_bbox, list_iou_thresholds)
+            ARs.append(AR)
             APs.append(AP)
 
-        return APs
+        mAP = np.mean(APs)
+        mAR = np.mean(ARs)
+
+        return mAP, mAR
 
 
 ############################################################
