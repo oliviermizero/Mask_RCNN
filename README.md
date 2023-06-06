@@ -9,4 +9,16 @@ This is an implementation of [Mask R-CNN](https://arxiv.org/abs/1703.06870) on P
 
 * ([image_prep.py](samples/maize/image_prep.py)): Script for downloading and preparing images from Segments.ai
 
-* ([feature_extraction.py](samples/maize/feature_extraction.py)): Tentative code for feature extraction
+* ([feature_extraction.py](samples/maize/feature_extraction.py)): Code for feature extraction
+
+
+# Requirements
+
+Install the following packages and their respective versions before running any code mentioned above. 
+
+- TensorFlow: version 1.15.0 or 1.14.0
+- TensorFlow GPU: version 1.15.0 or 1.14.0
+- Keras: version 2.0.8
+- Scikit-image: version 0.16.2
+- h5py: version 2.10.0
+- segments-ai
