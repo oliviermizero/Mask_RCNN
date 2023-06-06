@@ -8,9 +8,9 @@ This is an implementation of [Mask R-CNN](https://arxiv.org/abs/1703.06870) on P
 
 * ([maize.py](samples/maize/maize.py)): Main Script for training, testing, and evaluating the model.
 
-* ([image_prep.py](samples/maize/image_prep.py)): Script for downloading and preparing images from Segments.ai
+* ([image_prep.py](samples/maize/image_prep.py)): Script for downloading and preparing images from Segments.ai.
 
-* ([feature_extraction.py](samples/maize/feature_extraction.py)): Code for feature extraction
+* ([feature_extraction.py](samples/maize/feature_extraction.py)): Code for feature extraction.
 
 
 # Requirements
